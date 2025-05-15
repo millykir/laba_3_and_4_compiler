@@ -1,0 +1,34 @@
+G[Z] 
+P: 
+1) <START> -> indicator_symb < VARREM > 
+2) <VARREM> -> symb <VARREM> 
+3) < VARREM > -> '=' < QUOTE1 > 
+4) <QUOTE1> -> '"' <LBRACE> 
+5) <LBRACE> -> '{' <COLON> 
+6) <COLON> -> ':' <DOT> 
+7) <DOT> -> '.' <DIGITBEFOREEXP> 
+8) <DIGITBEFOREEXP> -> digit < DIGITBEFOREEXPREM > 
+9) < DIGITBEFOREEXPREM > -> digit < DIGITBEFOREEXPREM> 
+10) <DIGITBEFOREEXPREM> -> 'e' <RBRACE> 
+11) <RBRACE> -> '}' <QUOTE2> 
+12) <QUOTE2> -> '"' <DOT2> 
+13) <DOT2> -> '.' <FORMAT> 
+14) <FORMAT> -> 'format' <OPEN_PAREN> 
+15) <OPEN_PAREN> -> '(' <SIGN> 
+16) <OPEN_PAREN> -> digit <INTREM> 
+17) <SIGN> -> ‘-’ <INT>
+18) <SIGN> -> ‘+’<INT>
+19) <INT> -> digit <INTREM> 
+20) <INTREM> -> digit < INTREM > 
+21) < INTREM > -> ')' <SEMICOLON> 
+22) < INTREM > -> '.' < DECIMAL> 
+23) < DECIMAL> -> digit < DECIMALREM > 
+24) < DECIMALREM > -> digit < DECIMALREM > 
+25) <DECIMALREM> -> ')' <SEMICOLON> 
+26) <SEMICOLON> -> ';'
+------------------------------------------------------------
+digit -> 1|...|0
+indicator_symb -> a|...|z|A|...|Z|'_' 
+symb -> a|...|z|A|...|Z|'_'|1|...|9
+Vn = {<START>, <SPACE_AFTER_FINAL>, <SPACE_AFTER_TYPE>, <TYPE>, <VAR>, <VARREM>, <NUMBER>, <INTREM>}
+Vt = {a|...|z|A|...|Z|'_'|1|...|9, ' ', 'int', '+', '-', 'final', digit, symb, indicator_symb} 

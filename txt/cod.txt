@@ -1,0 +1,203 @@
+import re
+from difflib import SequenceMatcher
+import tkinter as tk
+from tkinter import messagebox
+import re
+from difflib import SequenceMatcher
+
+def check_balance_and_required(code):
+    errors = []
+    stack = []
+    pairs = {'(': ')', '{': '}', '[': ']'}
+    quote_counts = {'"': 0, "'": 0}
+
+    if '=' in code:
+        code_after_eq = code.split('=', 1)[1]
+
+        for char in code_after_eq:
+            if char in quote_counts:
+                quote_counts[char] += 1
+            elif char in pairs:
+                stack.append(pairs[char])
+            elif char in pairs.values():
+                if not stack or stack[-1] != char:
+                    errors.append(f"нет парной скобки к {char}")
+                else:
+                    stack.pop()
+
+        for quote, count in quote_counts.items():
+            if count % 2 != 0:
+                errors.append(f"несбалансированная кавычка {quote}")
+
+        if stack:
+            for ch in stack:
+                errors.append(f"не хватает {ch}")
+    else:
+        errors.append("отсутствует символ =")
+
+    if ';' not in code:
+        errors.append("отсутствует символ ;")
+
+    return errors
+
+def check_format_braces(code):
+    errors = []
+    for match in re.finditer(r"\{(.*?)\}", code):
+        fragment = match.group(1)
+        start, end = match.span()
+        context = code[max(0, start-10):min(len(code), end+10)]
+        pointer = " " * (start - max(0, start-10)) + "^" * (end - start)
+
+        if fragment.strip() == "":
+            errors.append(
+                f"неверно заданный формат — нет значения внутри фигурных скобок (позиция {start})\n  контекст: {context}\n           {pointer}"
+            )
+            continue
+
+        if not fragment.startswith(":"):
+            errors.append(
+                f"неверно заданный формат — не хватает ':' перед '{fragment}' (позиция {start})"
+            )
+            continue
+
+        format_match = re.match(r":\.(\d+)([eEfFgGsd])?$", fragment)
+        if not format_match:
+            if not re.search(r"\.\d+", fragment):
+                msg = "не хватает точности (например, .3)"
+            elif not re.search(r"[eEfFgGsd]$", fragment):
+                msg = "не хватает спецификатора типа (например, e, f, g, s, d)"
+            else:
+                msg = "лишние или некорректные символы в формате"
+
+            errors.append(
+                f"неверно заданный формат — {msg}: '{fragment}' (позиция {start})\n  контекст: {context}\n           {pointer}"
+            )
+    return errors
+
+def check_format_spelling(code):
+    errors = []
+    found_format = False
+
+    for match in re.finditer(r"(\.?)\b([a-zA-Z_][a-zA-Z_0-9]*)\s*\(", code):
+        dot, func_name = match.group(1), match.group(2)
+        start, end = match.span()
+
+        if func_name == "format":
+            found_format = True
+            if dot != ".":
+                context = code[max(0, start - 10):min(len(code), end + 10)]
+                pointer = " " * (start - max(0, start - 10)) + "^" * (end - start)
+                errors.append(
+                    f"не хватает '.' перед вызовом format (позиция {start})\n  контекст: {context}\n           {pointer}"
+                )
+        else:
+            similarity = SequenceMatcher(None, func_name, "format").ratio()
+            if similarity > 0.6:
+                errors.append(
+                    f"ожидали ключевое слово 'format', встретили идентификатор '{func_name}'"
+                )
+
+    return errors
+
+def check_round_brackets(code):
+    errors = []
+    for match in re.finditer(r"\((.*?)\)", code):
+        fragment = match.group(1)
+        start, end = match.span()
+        context = code[max(0, start-10):min(len(code), end+10)]
+        pointer = " " * (start - max(0, start-10)) + "^" * (end - start)
+
+        if fragment.strip() == "":
+            errors.append(
+                f"нет значения внутри круглых скобок (позиция {start})\n  контекст: {context}\n           {pointer}"
+            )
+        elif re.search(r"[a-zA-Z]", fragment):
+            errors.append(
+                f"неверный фрагмент в числе: '{fragment}' (позиция {start})\n  контекст: {context}\n           {pointer}"
+            )
+        elif ',' in fragment:
+            errors.append(
+                f"запятая в числе недопустима: '{fragment}' (позиция {start})\n  контекст: {context}\n           {pointer}"
+            )
+    return errors
+
+def check_duplicate_before_string(code):
+    errors = []
+    # Ищем все строки вида "что-то в кавычках"
+    string_matches = list(re.finditer(r'"[^"]*"', code))
+    
+    for match in string_matches:
+        start = match.start()
+        before = code[:start].strip()
+
+        # Проверка на повторяющиеся идентификаторы или =
+        tokens = re.findall(r'\b[a-zA-Z_][a-zA-Z_0-9]*\b|=', before)
+
+        seen = set()
+        duplicates = set()
+
+        for token in tokens:
+            if token in seen:
+                duplicates.add(token)
+            else:
+                seen.add(token)
+
+        if duplicates:
+            dup_list = ', '.join(duplicates)
+            context = code[max(0, start - 10):min(len(code), start + 10)]
+            pointer = " " * (start - max(0, start - 10)) + "^"
+
+            errors.append(
+                f"повтор перед строкой: {dup_list} (позиция {start})\n  контекст: {context}\n           {pointer}"
+            )
+
+    return errors
+
+
+def lexical_analyzer(code, file_path=None):
+    identifier_errors = []
+    for match in re.finditer(r"\b([a-zA-Z_][a-zA-Z_0-9]*)\b", code):
+        identifier = match.group(1)
+        if re.search(r"[^a-zA-Z0-9_]", identifier):
+            identifier_errors.append(f"недопустимый символ в идентификаторе: '{identifier}'")
+
+    allowed_pattern = r"[a-zA-Z0-9_=\.\(\)\{\}\[\]:\"\'e\+\-\*/%\s;]"
+    invalid_chars = re.findall(f"[^{allowed_pattern[1:-1]}]", code)
+    cleaned_code = re.sub(f"[^{allowed_pattern[1:-1]}]", "", code)
+
+    errors = []
+    errors += identifier_errors
+    errors += check_balance_and_required(cleaned_code)
+    errors += check_format_braces(cleaned_code)
+    errors += check_format_spelling(cleaned_code)
+    errors += check_round_brackets(cleaned_code)
+    errors += check_duplicate_before_string(cleaned_code)
+
+
+    for item in output_table.get_children():
+        output_table.delete(item)
+
+    if invalid_chars:
+        output_table.insert("", "end", values=(
+            "W001", "Обнаружен невалидный фрагмент",
+            ''.join(invalid_chars), "-", file_path or "–", "-"
+        ))
+
+    for err in errors:
+        match = re.search(r"позиция (\d+)", err)
+        position = match.group(1) if match else "-"
+        output_table.insert("", "end", values=(
+            "E001", "Ошибка синтаксиса/лексики",
+            err, position, file_path or "–", "1"
+        ))
+
+def syntax_analysis():
+    current_tab = notebook.nametowidget(notebook.select())
+    if current_tab and hasattr(current_tab, "text_area"):
+        text = current_tab.text_area.get("1.0", tk.END).rstrip()
+        file_path = getattr(current_tab, "file_path", "Без имени")
+        lexical_analyzer(text, file_path)
+    else:
+        messagebox.showerror("Ошибка", "Нет активного документа!")
+
+ 
